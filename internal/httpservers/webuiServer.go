@@ -1,14 +1,19 @@
 package httpservers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+
 	//	cors "github.com/OliveTin/OliveTin/internal/cors"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"os"
 
+	log "github.com/sirupsen/logrus"
+
 	config "github.com/OliveTin/OliveTin/internal/config"
 	updatecheck "github.com/OliveTin/OliveTin/internal/updatecheck"
+	ngrok "github.com/ngrok/libngrok-go"
 )
 
 type webUISettings struct {
@@ -70,10 +75,14 @@ func startWebUIServer(cfg *config.Config) {
 	mux.Handle("/", http.FileServer(http.Dir(findWebuiDir())))
 	mux.HandleFunc("/webUiSettings.json", generateWebUISettings)
 
-	srv := &http.Server{
-		Addr:    cfg.ListenAddressWebUI,
-		Handler: mux,
-	}
+	ctx := context.Background()
+	opts := ngrok.ConnectOptions().
+		WithAuthToken(os.Getenv("NGROK_TOKEN"))
+	sess, _ := ngrok.Connect(ctx, opts)
 
-	log.Fatal(srv.ListenAndServe())
+	tun, _ := sess.StartTunnel(ctx, ngrok.HTTPOptions())
+	l := tun.AsHTTP()
+	fmt.Println("url: ", l.URL())
+
+	log.Fatal(l.Serve(ctx, mux))
 }
